@@ -1,0 +1,74 @@
+from flask import Flask, render_template, request, redirect, url_for, flash
+from flask_sqlalchemy import SQLAlchemy
+
+app = Flask(__name__)
+app.secret_key = 'your_secret_key'
+app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///study_app.db'
+db = SQLAlchemy(app)
+
+class Subject(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(100), nullable=False)
+    topics = db.relationship('Topic', backref='subject', lazy=True)
+
+class Topic(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(100), nullable=False)
+    completed = db.Column(db.Boolean, default=False)
+    subject_id = db.Column(db.Integer, db.ForeignKey('subject.id'), nullable=False)
+
+class Note(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    text = db.Column(db.Text, nullable=False)
+    topic_id = db.Column(db.Integer, db.ForeignKey('topic.id'), nullable=False)
+
+# Cria o banco de dados se ele não existir
+db.create_all()
+
+@app.route('/')
+def index():
+    subjects = Subject.query.all()
+    return render_template('index.html', subjects=subjects)
+
+@app.route('/add_subject', methods=['POST'])
+def add_subject():
+    name = request.form['name']
+    subject = Subject(name=name)
+    db.session.add(subject)
+    db.session.commit()
+    flash('Matéria adicionada com sucesso!', 'success')
+    return redirect(url_for('index'))
+
+@app.route('/subject/<int:subject_id>')
+def subject(subject_id):
+    subject = Subject.query.get(subject_id)
+    return render_template('subject.html', subject=subject)
+
+@app.route('/add_topic/<int:subject_id>', methods=['POST'])
+def add_topic(subject_id):
+    name = request.form['name']
+    topic = Topic(name=name, subject_id=subject_id)
+    db.session.add(topic)
+    db.session.commit()
+    flash('Tópico adicionado com sucesso!', 'success')
+    return redirect(url_for('subject', subject_id=subject_id))
+
+@app.route('/mark_completed/<int:topic_id>', methods=['POST'])
+def mark_completed(topic_id):
+    topic = Topic.query.get(topic_id)
+    topic.completed = True
+    db.session.commit()
+    flash('Tópico marcado como concluído!', 'success')
+    return redirect(url_for('subject', subject_id=topic.subject_id))
+
+@app.route('/add_note/<int:topic_id>', methods=['POST'])
+def add_note(topic_id):
+    text = request.form['text']
+    note = Note(text=text, topic_id=topic_id)
+    db.session.add(note)
+    db.session.commit()
+    flash('Anotação adicionada com sucesso!', 'success')
+    return redirect(url_for('subject', subject_id=Topic.query.get(topic_id).subject_id))
+
+if __name__ == '__main__':
+    app.run(debug=True)
